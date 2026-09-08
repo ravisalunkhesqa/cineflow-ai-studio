@@ -1,0 +1,592 @@
+// CineFlow AI Studio — Prisma schema
+// Normalized core entities. JSON columns are used only for flexible/AI metadata,
+// never as a substitute for real relations (see docs/DATA_MODEL.md).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity / App-wide
+// ---------------------------------------------------------------------------
+
+model LocalProfile {
+  id        String   @id @default(cuid())
+  name      String   @default("Local User")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Project
+// ---------------------------------------------------------------------------
+
+model Project {
+  id          String   @id @default(cuid())
+  ownerId     String?
+  owner       LocalProfile? @relation(fields: [ownerId], references: [id])
+  name        String
+  tagline     String?
+  templateKey String?
+  aspectRatio String   @default("16:9")
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  settings      ProjectSettings?
+  story         Story?
+  script        Script?
+  styleBible    StyleBible?
+  characters    Character[]
+  locations     Location[]
+  props         Prop[]
+  scenes        Scene[]
+  shots         Shot[]
+  assets        Asset[]
+  generations   Generation[]
+  jobs          GenerationJob[]
+  timelines     Timeline[]
+  workflows     Workflow[]
+  conversations Conversation[]
+  prompts       Prompt[]
+
+  @@index([ownerId])
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model ProjectSettings {
+  id                      String  @id @default(cuid())
+  projectId               String  @unique
+  project                 Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sendOnlyRequiredContext Boolean @default(true)
+  defaultTextModelId      String?
+  defaultImageModelId     String?
+  defaultVideoModelId     String?
+  defaultAudioModelId     String?
+  defaultCodingModelId    String?
+  updatedAt               DateTime @updatedAt
+}
+
+model Story {
+  id         String   @id @default(cuid())
+  projectId  String   @unique
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  logline    String?
+  concept    String?
+  hook       String?
+  synopsis   String?
+  storyArc   String?
+  ending     String?
+  twist      String?
+  genre      String?
+  mood       String?
+  audience   String?
+  language   String?
+  metadata   Json?
+  updatedAt  DateTime @updatedAt
+}
+
+model Script {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  content   String?
+  metadata  Json?
+  updatedAt DateTime @updatedAt
+}
+
+model StyleBible {
+  id                  String   @id @default(cuid())
+  projectId           String   @unique
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  visualStyle         String?
+  colorPalette        String?
+  lighting            String?
+  contrast            String?
+  filmStockLook       String?
+  cameraFormat        String?
+  lensStyle           String?
+  depthOfField        String?
+  composition         String?
+  texture             String?
+  era                 String?
+  productionDesign    String?
+  wardrobeStyle       String?
+  skinRendering       String?
+  motionStyle         String?
+  negativeConstraints String[]
+  locked              Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Characters / Locations / Props
+// ---------------------------------------------------------------------------
+
+model Character {
+  id               String   @id @default(cuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name             String
+  tag              String // e.g. "Aarohi" used as @Aarohi
+  aliases          String[]
+  ageRange         String?
+  appearance       String?
+  faceDescription  String?
+  hair             String?
+  eyes             String?
+  skin             String?
+  wardrobe         String?
+  accessories      String?
+  personality      String?
+  bodyType         String?
+  visualStyle      String?
+  continuityNotes  String?
+  characterLock    Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  references CharacterReference[]
+
+  @@unique([projectId, tag])
+  @@index([projectId])
+}
+
+enum ReferenceAngle {
+  FRONT
+  PROFILE
+  THREE_QUARTER
+  FULL_BODY
+  COSTUME
+  EXPRESSION
+}
+
+model CharacterReference {
+  id          String         @id @default(cuid())
+  characterId String
+  character   Character      @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  angle       ReferenceAngle
+  createdAt   DateTime       @default(now())
+
+  @@index([characterId])
+}
+
+model Location {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name            String
+  tag             String
+  description     String?
+  architecture    String?
+  interiorExterior String?
+  timeOfDay       String?
+  weather         String?
+  lighting        String?
+  palette         String?
+  continuityNotes String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  references LocationReference[]
+
+  @@unique([projectId, tag])
+  @@index([projectId])
+}
+
+model LocationReference {
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([locationId])
+}
+
+model Prop {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  tag         String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, tag])
+  @@index([projectId])
+}
+
+// ---------------------------------------------------------------------------
+// Scenes / Shots
+// ---------------------------------------------------------------------------
+
+model Scene {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneNumber Int
+  intExt      String?
+  locationId  String?
+  timeOfDay   String?
+  description String?
+  duration    Int?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shots Shot[]
+
+  @@index([projectId])
+}
+
+enum ShotStatus {
+  DRAFT
+  READY
+  GENERATING
+  REVIEW
+  APPROVED
+  LOCKED
+}
+
+model Shot {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneId     String
+  scene       Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  shotNumber  Int
+  name        String?
+  description String?
+  duration    Int?
+
+  cameraShotSize     String?
+  cameraAngle        String?
+  cameraMovement     String?
+  lens               String?
+  depthOfField       String?
+
+  lighting   String?
+  mood       String?
+  colorGrade String?
+
+  prompt         String?
+  negativePrompt String?
+
+  characterIds       String[]
+  locationId         String?
+  propIds            String[]
+  referenceAssetIds  String[]
+
+  status ShotStatus @default(DRAFT)
+
+  selectedImageAssetId String?
+  selectedVideoAssetId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([sceneId])
+}
+
+// ---------------------------------------------------------------------------
+// Assets
+// ---------------------------------------------------------------------------
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  VOICE
+  MUSIC
+  SFX
+  REFERENCE
+  MASK
+}
+
+enum AssetApprovalStatus {
+  GENERATED
+  FAVORITE
+  SELECTED
+  APPROVED
+  ARCHIVED
+}
+
+model Asset {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  filename      String
+  type          AssetType
+  storageKey    String // MinIO object key
+  thumbnailKey  String?
+  source        String? // "upload" | "generation" | "frame_extraction"
+  prompt        String?
+  modelId       String?
+  width         Int?
+  height        Int?
+  durationMs    Int?
+  tags          String[]
+  metadata      Json?
+  parentAssetId String?
+  approvalStatus AssetApprovalStatus @default(GENERATED)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  characterReferences CharacterReference[]
+  locationReferences  LocationReference[]
+
+  @@index([projectId])
+  @@index([type])
+}
+
+// ---------------------------------------------------------------------------
+// Prompts / Model Registry / Generations / Jobs
+// ---------------------------------------------------------------------------
+
+model Prompt {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String?
+  structured Json // Subject/Action/Environment/Camera/Lighting/etc.
+  rawText   String?
+  isTemplate Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model ModelProvider {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g. "xkiro"
+  displayName String
+  baseUrl     String
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  models ModelDefinition[]
+}
+
+model ModelDefinition {
+  id           String        @id @default(cuid())
+  providerId   String
+  provider     ModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  modelId      String // e.g. "qwen/qwen3.8-max:free"
+  displayName  String
+  capabilities String[] // TEXT, IMAGE_INPUT, IMAGE_OUTPUT, VIDEO_OUTPUT, ...
+  enabled      Boolean       @default(true)
+  isDefaultFor String[] // task keys this model is default for
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  generations Generation[]
+
+  @@unique([providerId, modelId])
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model Generation {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  modelDefId    String?
+  modelDef      ModelDefinition? @relation(fields: [modelDefId], references: [id])
+  taskType      String // IDEATION, SCRIPT, SHOT_PLANNING, IMAGE_PROMPT, VIDEO_PROMPT, ...
+  prompt        String?
+  systemPrompt  String?
+  parameters    Json?
+  references    Json?
+  seed          String?
+  resultAssetIds String[]
+  status        JobStatus @default(QUEUED)
+  latencyMs     Int?
+  inputTokens   Int?
+  outputTokens  Int?
+  errorMessage  String?
+  fallbackFrom  String? // modelId that was tried before fallback occurred
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model GenerationJob {
+  id           String    @id @default(cuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type         String // IMAGE_GENERATION, VIDEO_GENERATION, AUDIO_GENERATION, FRAME_EXTRACTION, ...
+  status       JobStatus @default(QUEUED)
+  payload      Json
+  progress     Int?      @default(0)
+  resultAssetIds String[]
+  errorMessage String?
+  queuedAt     DateTime  @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Timeline
+// ---------------------------------------------------------------------------
+
+model Timeline {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String   @default("Main Timeline")
+  fps       Int      @default(30)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tracks TimelineTrack[]
+
+  @@index([projectId])
+}
+
+enum TimelineTrackType {
+  VIDEO
+  VOICE
+  MUSIC
+  SFX
+  TEXT
+}
+
+model TimelineTrack {
+  id         String            @id @default(cuid())
+  timelineId String
+  timeline   Timeline          @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  type       TimelineTrackType
+  order      Int
+  muted      Boolean           @default(false)
+  solo       Boolean           @default(false)
+
+  clips TimelineClip[]
+
+  @@index([timelineId])
+}
+
+model TimelineClip {
+  id          String         @id @default(cuid())
+  trackId     String
+  track       TimelineTrack  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  assetId     String?
+  startMs     Int
+  durationMs  Int
+  trimInMs    Int            @default(0)
+  trimOutMs   Int?
+  volume      Float?         @default(1)
+  fadeInMs    Int?
+  fadeOutMs   Int?
+  metadata    Json?
+
+  @@index([trackId])
+}
+
+// ---------------------------------------------------------------------------
+// Workflow builder
+// ---------------------------------------------------------------------------
+
+model Workflow {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  version   String   @default("1.0")
+  definition Json // full validated workflow JSON (nodes/edges/inputs/outputs)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  nodes WorkflowNode[]
+  edges WorkflowEdge[]
+
+  @@index([projectId])
+}
+
+model WorkflowNode {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  nodeKey    String // id within the workflow JSON
+  type       String
+  positionX  Float
+  positionY  Float
+  settings   Json?
+
+  @@index([workflowId])
+}
+
+model WorkflowEdge {
+  id           String   @id @default(cuid())
+  workflowId   String
+  workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sourceNodeKey String
+  targetNodeKey String
+
+  @@index([workflowId])
+}
+
+// ---------------------------------------------------------------------------
+// Flow Agent conversation
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ConversationMessage[]
+
+  @@index([projectId])
+}
+
+model ConversationMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // "user" | "assistant" | "tool"
+  content        String
+  toolCalls      Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@cineflow/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "dotenv -e ../../.env.local -- tsx watch src/server.ts",
+    "start": "dotenv -e ../../.env.local -- node dist/server.js",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cineflow/database": "workspace:*",
+    "@cineflow/shared": "workspace:*",
+    "@cineflow/config": "workspace:*",
+    "@cineflow/ai-core": "workspace:*",
+    "@cineflow/provider-sdk": "workspace:*",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/sensible": "^5.6.0",
+    "fastify": "^4.28.1",
+    "ioredis": "^5.4.1",
+    "minio": "^8.0.1",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "dotenv-cli": "^8.0.0",
+    "tsx": "^4.16.5",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
