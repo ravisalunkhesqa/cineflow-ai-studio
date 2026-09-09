@@ -2,10 +2,16 @@ import { INITIAL_MODELS, INITIAL_PROVIDERS } from "@cineflow/config";
 import type { Capability, ModelDefinitionConfig, ProviderDefinitionConfig, TaskType } from "@cineflow/shared";
 import type { AIProvider } from "@cineflow/provider-sdk";
 import { XKiroProvider } from "../providers/xkiro-provider";
+import { MockProvider, MOCK_MODEL_DEFINITIONS } from "../providers/mock-provider";
 
 export interface ResolvedModel {
   definition: ModelDefinitionConfig;
   provider: AIProvider;
+}
+
+/** Brief §23: mock providers are only ever active in explicit dev mode, never by default. */
+export function areMockProvidersEnabled(): boolean {
+  return process.env.ENABLE_MOCK_PROVIDERS === "true" && process.env.NODE_ENV !== "production";
 }
 
 /**
@@ -38,6 +44,15 @@ export class ModelRegistry {
       }
       // Future providers (Google/Runway/ElevenLabs/...) register here without touching
       // any application code that calls ModelRegistry.
+    }
+
+    if (areMockProvidersEnabled()) {
+      this.providers.set("mock", new MockProvider());
+      this.modelDefs = [...this.modelDefs, ...MOCK_MODEL_DEFINITIONS];
+      this.providerDefs = [
+        ...this.providerDefs,
+        { key: "mock", displayName: "Mock Provider (dev)", baseUrl: "local://mock", enabled: true },
+      ];
     }
   }
 
@@ -85,6 +100,21 @@ export class ModelRegistry {
 
   hasCapability(modelId: string, capability: Capability): boolean {
     return this.getModel(modelId)?.capabilities.includes(capability) ?? false;
+  }
+
+  /**
+   * Finds any enabled, configured model with the given capability — used for
+   * IMAGE_OUTPUT/VIDEO_OUTPUT generation requests, which aren't routed by TaskType
+   * (those are for text tasks) but by "does anything support this output type at all".
+   */
+  resolveForCapability(capability: Capability): ResolvedModel | undefined {
+    const candidate = this.modelDefs.find(
+      (m) => m.enabled && m.capabilities.includes(capability) && this.providers.has(m.providerKey),
+    );
+    if (!candidate) return undefined;
+    const provider = this.providers.get(candidate.providerKey);
+    if (!provider) return undefined;
+    return { definition: candidate, provider };
   }
 }
 

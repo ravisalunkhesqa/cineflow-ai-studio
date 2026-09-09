@@ -13,6 +13,7 @@ import { modelsRoutes } from "./modules/models/models.routes";
 import { agentRoutes } from "./modules/agent/agent.routes";
 import { promptsRoutes } from "./modules/prompts/prompts.routes";
 import { assetsRoutes } from "./modules/assets/assets.routes";
+import { jobsRoutes } from "./modules/jobs/jobs.routes";
 import { getHealth } from "./modules/health/health.service";
 
 const PORT = Number(process.env.API_PORT ?? 4000);
@@ -54,6 +55,7 @@ async function buildServer() {
   await app.register(agentRoutes);
   await app.register(promptsRoutes);
   await app.register(assetsRoutes);
+  await app.register(jobsRoutes);
 
   app.get("/", async () => ({
     name: "CineFlow AI Studio API",

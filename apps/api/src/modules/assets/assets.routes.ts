@@ -143,13 +143,14 @@ export async function assetsRoutes(app: FastifyInstance) {
 
   app.get("/api/projects/:projectId/assets", async (req, reply) => {
     const { projectId } = req.params as { projectId: string };
-    const { type, favorite } = req.query as { type?: string; favorite?: string };
+    const { type, favorite, shotId } = req.query as { type?: string; favorite?: string; shotId?: string };
 
     const assets = await prisma.asset.findMany({
       where: {
         projectId,
         ...(type ? { type: type as (typeof ASSET_TYPES)[number] } : {}),
         ...(favorite === "true" ? { approvalStatus: "FAVORITE" } : {}),
+        ...(shotId ? { metadata: { path: ["shotId"], equals: shotId } } : {}),
       },
       orderBy: { createdAt: "desc" },
     });

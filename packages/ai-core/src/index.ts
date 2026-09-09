@@ -1,4 +1,5 @@
 export * from "./providers/xkiro-provider";
+export * from "./providers/mock-provider";
 export * from "./registry/model-registry";
 export * from "./registry/model-router";
 export * from "./context/context-assembler";

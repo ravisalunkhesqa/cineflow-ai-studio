@@ -104,9 +104,7 @@ export interface Shot {
   selectedVideoAssetId: string | null;
 }
 
-export type ShotInput = Partial<
-  Omit<Shot, "id" | "projectId" | "selectedImageAssetId" | "selectedVideoAssetId">
-> & { sceneId: string; shotNumber: number };
+export type ShotInput = Partial<Omit<Shot, "id" | "projectId">> & { sceneId: string; shotNumber: number };
 
 export interface Scene {
   id: string;
@@ -638,4 +636,103 @@ export async function deleteLocationReference(
   await apiFetch(`/projects/${projectId}/locations/${locationId}/references/${refId}`, {
     method: "DELETE",
   });
+}
+
+// ---- Generation Jobs ----
+
+export type GenerationJobStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+
+export interface GenerationJob {
+  id: string;
+  projectId: string;
+  type: string;
+  status: GenerationJobStatus;
+  progress: number | null;
+  resultAssetIds: string[];
+  errorMessage: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export async function requestThumbnail(projectId: string, assetId: string): Promise<GenerationJob> {
+  const data = await apiFetch<{ job: GenerationJob }>(`/projects/${projectId}/assets/${assetId}/thumbnail`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return data.job;
+}
+
+export async function requestFrameExtraction(
+  projectId: string,
+  assetId: string,
+  position: "first" | "last" | "timestamp",
+  timestampMs?: number,
+): Promise<GenerationJob> {
+  const data = await apiFetch<{ job: GenerationJob }>(`/projects/${projectId}/assets/${assetId}/extract-frame`, {
+    method: "POST",
+    body: JSON.stringify({ position, timestampMs }),
+  });
+  return data.job;
+}
+
+export async function listJobs(projectId: string): Promise<GenerationJob[]> {
+  const data = await apiFetch<{ jobs: GenerationJob[] }>(`/projects/${projectId}/jobs`);
+  return data.jobs;
+}
+
+export async function cancelJob(jobId: string): Promise<GenerationJob> {
+  const data = await apiFetch<{ job: GenerationJob }>(`/jobs/${jobId}/cancel`, { method: "POST" });
+  return data.job;
+}
+
+/** Opens an SSE connection streaming this project's active + recently-finished jobs. */
+export function streamJobs(
+  projectId: string,
+  onUpdate: (data: { active: GenerationJob[]; recentlyFinished: GenerationJob[] }) => void,
+): () => void {
+  const source = new EventSource(`/api/backend/projects/${projectId}/jobs/stream`);
+  source.onmessage = (event) => {
+    try {
+      onUpdate(JSON.parse(event.data));
+    } catch {
+      // ignore malformed frame
+    }
+  };
+  return () => source.close();
+}
+
+// ---- Image / Video Generation ----
+
+export async function generateShotImage(
+  projectId: string,
+  shotId: string,
+): Promise<{ job: GenerationJob; provider: string }> {
+  return apiFetch(`/projects/${projectId}/shots/${shotId}/generate-image`, { method: "POST" });
+}
+
+export async function generateShotVideo(
+  projectId: string,
+  shotId: string,
+): Promise<{ job: GenerationJob; provider: string }> {
+  return apiFetch(`/projects/${projectId}/shots/${shotId}/generate-video`, { method: "POST" });
+}
+
+export async function listShotGenerations(projectId: string, shotId: string): Promise<Asset[]> {
+  const data = await apiFetch<{ assets: Asset[] }>(
+    `/projects/${projectId}/assets?shotId=${encodeURIComponent(shotId)}`,
+  );
+  return data.assets;
+}
+
+export interface GenerationCapabilities {
+  imageConfigured: boolean;
+  videoConfigured: boolean;
+}
+
+export async function getGenerationCapabilities(): Promise<GenerationCapabilities> {
+  const data = await listModels();
+  const imageConfigured = data.models.some((m) => m.capabilities.includes("IMAGE_OUTPUT") && m.configured);
+  const videoConfigured = data.models.some((m) => m.capabilities.includes("VIDEO_OUTPUT") && m.configured);
+  return { imageConfigured, videoConfigured };
 }

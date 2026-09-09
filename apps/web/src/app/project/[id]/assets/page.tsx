@@ -12,7 +12,7 @@ import {
   Music,
   File as FileIcon,
 } from "lucide-react";
-import { listAssets, uploadFile, updateAsset, deleteAsset, type Asset, type AssetType } from "@/lib/api-client";
+import { listAssets, uploadFile, updateAsset, deleteAsset, requestThumbnail, requestFrameExtraction, type Asset, type AssetType } from "@/lib/api-client";
 
 const TYPE_FILTERS: { label: string; value: AssetType | "ALL" }[] = [
   { label: "All", value: "ALL" },
@@ -96,6 +96,23 @@ export default function AssetsPage({ params }: { params: { id: string } }) {
     if (!confirm(`Permanently delete "${asset.filename}"? This cannot be undone.`)) return;
     try {
       await deleteAsset(projectId, asset.id);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleThumbnail(asset: Asset) {
+    try {
+      await requestThumbnail(projectId, asset.id);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleExtractFrame(asset: Asset, position: "first" | "last") {
+    try {
+      await requestFrameExtraction(projectId, asset.id, position);
       await refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -209,6 +226,32 @@ export default function AssetsPage({ params }: { params: { id: string } }) {
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                   </button>
                 </div>
+                {(asset.type === "IMAGE" || asset.type === "VIDEO" || asset.type === "REFERENCE") && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    <button
+                      onClick={() => handleThumbnail(asset)}
+                      className="rounded border border-border-subtle px-1.5 py-0.5 text-[10px] text-text-secondary hover:border-accent-soft hover:text-text-primary"
+                    >
+                      Generate Thumbnail
+                    </button>
+                    {asset.type === "VIDEO" && (
+                      <>
+                        <button
+                          onClick={() => handleExtractFrame(asset, "first")}
+                          className="rounded border border-border-subtle px-1.5 py-0.5 text-[10px] text-text-secondary hover:border-accent-soft hover:text-text-primary"
+                        >
+                          First Frame
+                        </button>
+                        <button
+                          onClick={() => handleExtractFrame(asset, "last")}
+                          className="rounded border border-border-subtle px-1.5 py-0.5 text-[10px] text-text-secondary hover:border-accent-soft hover:text-text-primary"
+                        >
+                          Last Frame
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );

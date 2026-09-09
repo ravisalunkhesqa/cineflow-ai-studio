@@ -67,6 +67,16 @@ export function buildObjectKey(projectId: string, category: AssetCategory, filen
   return `projects/${projectId}/${folder}/${randomUUID()}-${safeName}`;
 }
 
+/** For derived media that isn't itself an AssetType (thumbnails, extracted frames). */
+export function buildDerivedObjectKey(
+  projectId: string,
+  kind: "thumbnails" | "frames",
+  filename: string,
+): string {
+  const safeName = sanitizeFilename(filename);
+  return `projects/${projectId}/${kind}/${randomUUID()}-${safeName}`;
+}
+
 export function sanitizeFilename(filename: string): string {
   const base = filename.split(/[\\/]/).pop() ?? "file";
   const cleaned = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(-150);
@@ -95,6 +105,18 @@ export async function getDownloadUrl(objectKey: string): Promise<string> {
 
 export async function deleteObject(objectKey: string): Promise<void> {
   await getClient().removeObject(BUCKET, objectKey);
+}
+
+/** Used by the job worker to pull a source object down to a local temp file for ffmpeg. */
+export async function downloadToFile(objectKey: string, localPath: string): Promise<void> {
+  await ensureBucket();
+  await getClient().fGetObject(BUCKET, objectKey, localPath);
+}
+
+/** Used by the job worker to push a generated output (thumbnail/frame) back to MinIO. */
+export async function uploadFromFile(objectKey: string, localPath: string, contentType: string): Promise<void> {
+  await ensureBucket();
+  await getClient().fPutObject(BUCKET, objectKey, localPath, { "Content-Type": contentType });
 }
 
 export function isMinioConfigured(): boolean {

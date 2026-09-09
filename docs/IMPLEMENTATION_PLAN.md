@@ -82,9 +82,9 @@ trusted backend code, never concatenated from raw AI/user strings (§54).
 | 4 | XKiro provider + Model Registry service + Flow Agent | **Done** |
 | 5 | Prompt Composer + cinematography controls | **Done** |
 | 6 | Asset library + uploads + MinIO wiring | **Done** |
-| 7 | Generation job infrastructure (BullMQ) | Pending (next) |
-| 8 | Image/video provider-capability architecture | Pending |
-| 9 | Timeline + FFmpeg | Pending |
+| 7 | Generation job infrastructure (BullMQ) | **Done** |
+| 8 | Image/video provider-capability architecture | **Done** |
+| 9 | Timeline + FFmpeg | Pending (next) |
 | 10 | Workflow builder (React Flow) | Pending |
 | 11 | Continuity engine | Pending |
 | 12 | Audio architecture | Pending |

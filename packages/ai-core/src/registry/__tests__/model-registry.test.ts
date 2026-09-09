@@ -5,9 +5,13 @@ import { INITIAL_MODELS, INITIAL_PROVIDERS } from "@cineflow/config";
 
 describe("ModelRegistry", () => {
   const originalKey = process.env.XTROUTER_API_KEY;
+  const originalMock = process.env.ENABLE_MOCK_PROVIDERS;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   afterEach(() => {
     process.env.XTROUTER_API_KEY = originalKey;
+    process.env.ENABLE_MOCK_PROVIDERS = originalMock;
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   it("does not register a provider when no API key is configured", () => {
@@ -26,6 +30,29 @@ describe("ModelRegistry", () => {
     const registry = new ModelRegistry(INITIAL_PROVIDERS, INITIAL_MODELS);
     expect(registry.hasCapability("qwen/qwen3.5-omni-plus:free", "VIDEO_OUTPUT")).toBe(false);
     expect(registry.hasCapability("qwen/qwen3.5-omni-plus:free", "TEXT")).toBe(true);
+  });
+
+  it("does NOT register the mock provider by default", () => {
+    delete process.env.ENABLE_MOCK_PROVIDERS;
+    const registry = new ModelRegistry(INITIAL_PROVIDERS, INITIAL_MODELS);
+    expect(registry.isConfigured("mock")).toBe(false);
+    expect(registry.resolveForCapability("IMAGE_OUTPUT")).toBeUndefined();
+  });
+
+  it("does NOT register the mock provider in production even if the flag is set", () => {
+    process.env.ENABLE_MOCK_PROVIDERS = "true";
+    process.env.NODE_ENV = "production";
+    const registry = new ModelRegistry(INITIAL_PROVIDERS, INITIAL_MODELS);
+    expect(registry.isConfigured("mock")).toBe(false);
+  });
+
+  it("registers the mock provider only when explicitly enabled outside production", () => {
+    process.env.ENABLE_MOCK_PROVIDERS = "true";
+    process.env.NODE_ENV = "development";
+    const registry = new ModelRegistry(INITIAL_PROVIDERS, INITIAL_MODELS);
+    expect(registry.isConfigured("mock")).toBe(true);
+    expect(registry.resolveForCapability("IMAGE_OUTPUT")?.definition.providerKey).toBe("mock");
+    expect(registry.resolveForCapability("VIDEO_OUTPUT")?.definition.providerKey).toBe("mock");
   });
 });
 

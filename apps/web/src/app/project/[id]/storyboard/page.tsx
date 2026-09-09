@@ -15,9 +15,10 @@ import {
   horizontalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { Plus, Trash2, Copy, Image as ImageIcon, Video, Info } from "lucide-react";
+import { Plus, Trash2, Copy } from "lucide-react";
 import { ShotCard } from "@/components/storyboard/shot-card";
 import { PromptComposerPanel } from "@/components/storyboard/prompt-composer-panel";
+import { GenerationPanel } from "@/components/storyboard/generation-panel";
 import {
   SHOT_SIZES,
   CAMERA_ANGLES,
@@ -436,29 +437,15 @@ export default function StoryboardPage({ params }: { params: { id: string } }) {
               />
             </fieldset>
 
-            {/* Generation actions — disabled until a real provider is wired (Phase 4/8) */}
-            <div className="mt-6 flex items-center gap-2 border-t border-border-subtle pt-4">
-              <button
-                disabled
-                title="No image-generation provider is configured."
-                className="flex cursor-not-allowed items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-text-muted opacity-50"
-              >
-                <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Generate Image
-              </button>
-              <button
-                disabled
-                title="No video-generation provider is configured."
-                className="flex cursor-not-allowed items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-text-muted opacity-50"
-              >
-                <Video className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Generate Video
-              </button>
-              <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                <Info className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Wired up in Phase 4/8.
-              </span>
-            </div>
+            {/* Generation actions — capability-gated per §23/§24 */}
+            <GenerationPanel
+              projectId={projectId}
+              shotId={selectedShot.id}
+              hasPrompt={Boolean(selectedShot.prompt)}
+              locked={selectedShot.status === "LOCKED"}
+              onSelectImage={(assetId) => patchSelectedShot({ selectedImageAssetId: assetId })}
+              onSelectVideo={(assetId) => patchSelectedShot({ selectedVideoAssetId: assetId })}
+            />
           </div>
         )}
       </div>

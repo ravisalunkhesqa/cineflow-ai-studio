@@ -15,6 +15,7 @@
     "@cineflow/shared": "workspace:*",
     "@cineflow/config": "workspace:*",
     "@cineflow/database": "workspace:*",
+    "@cineflow/media-engine": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

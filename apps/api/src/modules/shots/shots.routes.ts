@@ -25,6 +25,8 @@ const ShotInputSchema = z.object({
   propIds: z.array(z.string()).default([]),
   referenceAssetIds: z.array(z.string()).default([]),
   status: z.enum(SHOT_STATUSES).default("DRAFT"),
+  selectedImageAssetId: z.string().nullable().optional(),
+  selectedVideoAssetId: z.string().nullable().optional(),
 });
 
 // Fields a LOCKED shot may still have changed (status itself, to unlock) — everything
@@ -84,6 +86,29 @@ export async function shotsRoutes(app: FastifyInstance) {
         return reply.status(409).send({
           error: "SHOT_LOCKED",
           message: "This shot is locked. Change its status away from LOCKED before editing other fields.",
+        });
+      }
+    }
+
+    if (parsed.data.selectedImageAssetId) {
+      const asset = await prisma.asset.findFirst({
+        where: { id: parsed.data.selectedImageAssetId, projectId, type: "IMAGE" },
+      });
+      if (!asset) {
+        return reply.status(400).send({
+          error: "INVALID_REFERENCE",
+          message: "selectedImageAssetId does not reference an IMAGE asset in this project.",
+        });
+      }
+    }
+    if (parsed.data.selectedVideoAssetId) {
+      const asset = await prisma.asset.findFirst({
+        where: { id: parsed.data.selectedVideoAssetId, projectId, type: "VIDEO" },
+      });
+      if (!asset) {
+        return reply.status(400).send({
+          error: "INVALID_REFERENCE",
+          message: "selectedVideoAssetId does not reference a VIDEO asset in this project.",
         });
       }
     }

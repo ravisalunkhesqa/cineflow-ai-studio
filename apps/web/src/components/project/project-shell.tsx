@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { ProjectTabs } from "./project-tabs";
 import { FlowAgentPanel } from "./flow-agent-panel";
+import { JobTray } from "./job-tray";
 
 export function ProjectShell({ projectId, children }: { projectId: string; children: React.ReactNode }) {
   const [agentOpen, setAgentOpen] = useState(false);
@@ -26,6 +27,7 @@ export function ProjectShell({ projectId, children }: { projectId: string; child
         <div className="flex-1 overflow-y-auto">{children}</div>
         {agentOpen && <FlowAgentPanel projectId={projectId} onClose={() => setAgentOpen(false)} />}
       </div>
+      <JobTray projectId={projectId} />
     </div>
   );
 }

@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "pnpm --parallel --filter ./apps/* run dev",
+    "dev:worker": "pnpm --filter @cineflow/api run dev:worker",
     "build": "pnpm --recursive run build",
     "lint": "pnpm --recursive run lint",
     "typecheck": "pnpm --recursive run typecheck",

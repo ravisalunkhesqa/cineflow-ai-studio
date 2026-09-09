@@ -1,6 +1,91 @@
 # Implementation Status
 
-_Last updated: end of this build session (Phase 0, Phase 1 foundational slice, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6)._
+_Last updated: end of this build session (Phase 0, Phase 1 foundational slice, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8)._
+
+## Completed — Phase 8 (this session)
+
+- **`MockProvider`** (`packages/ai-core/src/providers/mock-provider.ts`) — brief §23's
+  explicit dev-mode mock provider, implementing `generateImage`/`generateVideo`
+  (declares `IMAGE_OUTPUT`/`VIDEO_OUTPUT` only, never `TEXT` — calling `chat()` throws
+  `ProviderCapabilityError`). Every output is a solid-color placeholder image or
+  synthetic test-pattern video with the prompt burned in via ffmpeg
+  (`packages/media-engine/src/synth.ts`, new), and every resulting `Asset`/job is
+  tagged `mock`/`source: "mock_generation"` so the UI can show a visible "DEV MOCK"
+  badge — never presented as real output. **Only registers when BOTH
+  `ENABLE_MOCK_PROVIDERS=true` and `NODE_ENV != production`** — off by default, tested
+  explicitly (both the gating logic AND real generation calls that actually invoke
+  ffmpeg and produce real files — 4 new tests in `mock-provider.test.ts`, 3 more in
+  `synth.test.ts`, all passing against a real ffmpeg binary in this sandbox).
+- `ModelRegistry.resolveForCapability(capability)` — new method for "find any
+  configured model with capability X", since image/video generation isn't routed by
+  `TaskType` the way text tasks are.
+- `apps/api/src/worker.ts`: `IMAGE_GENERATION`/`VIDEO_GENERATION` job handlers,
+  following the exact same job-queue pattern Phase 7 established. Capability-gated via
+  `ModelRouter.assertCapability` — if no provider declares the capability, the job
+  never gets created in the first place (see routes below), and if a provider claims a
+  capability but doesn't implement the method, that's a clear internal error rather
+  than a silent no-op.
+- `apps/api`: `POST .../shots/:shotId/generate-image` and `.../generate-video` —
+  return the **exact required message** from §23 ("No image-generation provider is
+  configured.") / its video equivalent when nothing is configured, with a `503` rather
+  than enqueueing something that could only fail. Blocked on `LOCKED` shots and shots
+  without a prompt. Project aspect ratio is resolved to pixel dimensions server-side.
+- Fixed a real gap found while wiring this up: `Shot`'s `selectedImageAssetId`/
+  `selectedVideoAssetId` were **excluded from the PATCH schema** since Phase 3 — no
+  route could ever set them. Added them back with type validation (must be an
+  IMAGE/VIDEO asset belonging to the project) so §31/§65's "Select Winner" /
+  "only APPROVED-ish user choice becomes the primary reference" pattern actually works.
+- `apps/web`: Storyboard's Generate Image/Video buttons are no longer permanently
+  disabled — a new `GenerationPanel` component checks `GET /api/models` for a
+  configured `IMAGE_OUTPUT`/`VIDEO_OUTPUT` model and enables/disables accordingly with
+  the exact same required messaging, shows recent generation results scoped to the
+  shot (tagged with a DEV MOCK badge when applicable) with a "Use" button that sets
+  the shot's selected asset — the user picks, nothing is auto-selected.
+
+**Deliberately NOT done in this phase** (see "Next phase" below): resolving `@mention`
+tokens to internal Character/Location IDs before sending a generation request (still
+sends prompt text as-is); attaching approved reference assets as `REFERENCE_IMAGES` to
+the generation call; a real (non-mock) image/video provider, since XKiro's actual
+capabilities are still unverified.
+
+## Completed — Phase 7 (this session)
+
+- `packages/media-engine` is now real (was a stub): `runFfmpeg`/`runFfprobe` wrappers
+  (array-based args only, never shell strings, per §54), `getDurationSeconds`/
+  `getDimensions` via ffprobe, `generateThumbnail` (video: seek 1s + scale, with a
+  fallback to 0s for clips under 1s; image: scale), and `extractFrame` (first/last/
+  timestamp — "last" uses ffprobe's duration to seek just before the end). **11/11
+  tests pass using a real ffmpeg binary** against synthesized test video/image files
+  (no fixtures, no network) — this is the one AI/media-adjacent piece of the whole
+  build that could be genuinely end-to-end verified in this sandbox rather than just
+  type-checked, since ffmpeg happened to be installed here.
+- `apps/api/src/lib/queue.ts` + `apps/api/src/worker.ts` — a BullMQ queue and a
+  **separate worker process** (`pnpm dev:worker` / `pnpm --filter @cineflow/api run worker`)
+  so a slow ffmpeg job can never block HTTP request handling. The worker only
+  implements `THUMBNAIL_GENERATION` and `FRAME_EXTRACTION` — any other `JOB_TYPE`
+  fails loudly with "not implemented in this build" rather than pretending to
+  succeed. Each job downloads its source from MinIO to a temp dir, runs media-engine,
+  uploads the result back, and updates the `GenerationJob` row (+ `Asset.thumbnailKey`
+  for thumbnails, or a new `Asset` with `source: "frame_extraction"` and
+  `parentAssetId` for extracted frames — wiring up the §66/§67 continuity chain).
+- `apps/api/src/modules/jobs/jobs.routes.ts`: enqueue endpoints for both job types,
+  `GET .../jobs` (recent), `GET /api/jobs/:id`, and `POST /api/jobs/:id/cancel` —
+  cancellation is honest per §82: a still-`QUEUED` job is actually removed from the
+  queue, but a `PROCESSING` job (already running a local ffmpeg child process this
+  build doesn't track a kill-handle for) gets a 409 explaining it can't be interrupted
+  mid-run, never a false "cancelled" response.
+- SSE endpoint (`GET .../jobs/stream`) so the browser polls nothing — deliberately
+  DB-driven (queries `GenerationJob` every ~1.5s) rather than wired to BullMQ's
+  `QueueEvents`, so it behaves identically whether the worker runs in-process or as
+  the separate process described above.
+- `apps/web`: a bottom expandable **Job Tray** (§10) in every project view, driven by
+  the SSE stream, showing active jobs with a spinner and recently-finished ones with
+  their outcome; a queued job can be cancelled from the tray. The Asset Library page
+  gained "Generate Thumbnail" / "First Frame" / "Last Frame" actions on video/image
+  assets that enqueue real jobs.
+
+**Root `.env.example` and `docker-compose.yml` already had `REDIS_URL`/Redis service
+from Phase 0 — no changes needed there.**
 
 ## Completed — Phase 6 (this session)
 
@@ -197,10 +282,11 @@ in one place.
 | `@cineflow/shared` | ✅ pass | ✅ pass | ✅ pass | ✅ 6/6 tests pass |
 | `@cineflow/config` | ✅ pass | ✅ pass | ✅ pass | n/a (no logic yet) |
 | `@cineflow/provider-sdk` | ✅ pass | ✅ pass | ✅ pass | n/a (interface only) |
-| `@cineflow/ai-core` | ✅ pass | blocked* (only via `context`/`agent`/`prompt` modules importing `@cineflow/database`) | not run | ✅ 11/11 tests pass (`ModelRegistry`/`ModelRouter`/`composeRawPrompt`, isolated from DB-dependent modules) |
+| `@cineflow/media-engine` | ✅ pass | ✅ pass | not run | ✅ **14/14 tests pass with a real ffmpeg binary** (thumbnail/frame-extraction/probe/synth, synthesized test media) |
+| `@cineflow/ai-core` | ✅ pass | blocked* (only via `context`/`agent`/`prompt` modules importing `@cineflow/database`) | not run | ✅ **18/18 tests pass**, including 4 that call `MockProvider.generateImage/generateVideo` and verify real files come out |
 | `apps/web` | ✅ pass (0 warnings, 17 routes) | ✅ pass | ✅ `next build` succeeds | n/a (Phase 14) |
 | `@cineflow/database` | not run | blocked* | blocked* | n/a |
-| `apps/api` | not run** | blocked* (only the known missing-generated-client error; all route modules through Phase 6 introduced no new type errors after fixes) | blocked* | `storage.test.ts` (pure logic, no DB import) ✅ 8/8 pass; DB-dependent tests still blocked* |
+| `apps/api` | not run** | blocked* (only the known missing-generated-client error; all route modules through Phase 8 introduced no new type errors after fixes) | blocked* | `storage.test.ts` (pure logic, no DB import) ✅ 8/8 pass; DB-dependent tests still blocked* |
 
 \* **Blocked by this sandbox's network allowlist, not a code defect.** `prisma generate`
 needs to download the query engine binary from `binaries.prisma.sh`, which isn't in this
@@ -236,27 +322,34 @@ was found via typecheck and fixed.
 
 ## Next implementation phase
 
-**Phase 7 — Generation job infrastructure (BullMQ).** Suggested first slice:
-- Wire `ioredis`/BullMQ workers for the job types already enumerated in
-  `packages/shared/src/capabilities.ts` (`JOB_TYPES`) and modeled in the `GenerationJob`
-  table: start with `THUMBNAIL_GENERATION` and `FRAME_EXTRACTION` since Phase 6 gave
-  you real uploaded video/image assets to test against, and both are useful before any
-  image/video AI provider exists.
-- `POST /api/jobs` (or per-feature endpoints) to enqueue, `GET /api/jobs/:id` to poll
-  status, and an SSE or WebSocket endpoint so the browser doesn't have to poll — the
-  brief is explicit that the UI must never freeze while a job runs (§12).
-- A small `apps/worker` process (or a worker entrypoint inside `apps/api`) that
-  consumes the queue; keep it separate enough that it can scale independently later.
-- Once job infra exists, Phase 8 (image/video provider-capability architecture) has
-  somewhere real to report progress — don't build Phase 8's provider adapters before
-  this, since every one of them will need to report through the same job/queue path.
+**Phase 9 — Timeline + FFmpeg (render/export).** Suggested first slice:
+- `TimelineTrack`/`TimelineClip` already exist in the schema (Phase 0) but have no UI
+  or API yet. Build `/project/[id]/timeline`: drag assets from the Asset Library onto
+  VIDEO/VOICE/MUSIC/SFX/TEXT tracks, trim/move/split, a playhead + time ruler, and a
+  preview monitor — brief §35 says prioritize stability over advanced editing for v1.
+- `VIDEO_EXPORT` job type (already in `JOB_TYPES`, not yet implemented — mirrors
+  Phase 7's `THUMBNAIL_GENERATION`/`FRAME_EXTRACTION` pattern exactly): the worker
+  concatenates/renders a `Timeline`'s clips via ffmpeg into a final MP4, using the
+  export presets from §37 (resolution/FPS/bitrate/aspect ratio per platform).
+- FFmpeg argument construction for render/export must follow the same array-based,
+  no-string-concatenation discipline already established in `packages/media-engine`
+  (§54) — extend that package rather than writing new ad-hoc ffmpeg calls.
+- Text overlays (§36) can be a thin pass here too: burn in simple title/lower-third
+  text via ffmpeg's drawtext (the same filter `synth.ts` already uses for mock media),
+  gated to render/export time rather than claiming AI-generated visuals handle typography.
 
-**Carried-forward flags to resolve before relying on any of this in production use**:
-- `@mention` in the Prompt Composer still inserts plain text, not resolved internal
-  IDs — deferred again to Phase 8's generation-request assembly (see Phase 6 notes
-  above).
-- MinIO upload size limits are MIME-allowlist-only, not policy-enforced (see Phase 6
-  notes above) — revisit if oversized uploads become a real concern.
-- **`XKiroProvider`'s response-shape assumption is still unverified** against a live
-  call — please confirm this on your machine before Phase 7 wires up jobs that will
-  eventually call it for image/video prompts.
+**Also worth doing whenever a real image/video provider becomes available** (not
+blocking, but flagged so it isn't forgotten):
+- Resolve `@mention` tokens in the Prompt Composer to internal Character/Location IDs
+  and attach their approved reference assets as `REFERENCE_IMAGES` on generation
+  requests, instead of sending raw `@tag` text (flagged since Phase 6).
+- Swap `packages/config`'s registry to include a real image/video-capable model once
+  verified against actual XKiro responses — `ModelRegistry`/`ModelRouter`/the worker's
+  `IMAGE_GENERATION`/`VIDEO_GENERATION` handlers need no changes to pick it up, by design.
+
+**Carried-forward flags, still unresolved**:
+- `XKiroProvider`'s chat response-shape assumption is still unverified against a live
+  call (flagged since Phase 4).
+- MinIO upload size limits are MIME-allowlist-only, not policy-enforced (Phase 6).
+- Job cancellation cannot interrupt an in-progress local ffmpeg/provider call
+  mid-run (Phase 7/8) — this will matter for `VIDEO_EXPORT` jobs too, which can run long.
